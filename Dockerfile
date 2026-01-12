@@ -25,16 +25,13 @@ RUN apt-get update && \
 
 # Copy and install dependencies
 COPY package*.json ./
-COPY packages/plugin-api/package*.json ./packages/plugin-api/
-COPY packages/plugin-api/tsconfig.json ./packages/plugin-api/
-COPY packages/plugin-api/src ./packages/plugin-api/src
-COPY packages/shared-schema/package*.json ./packages/shared-schema/
-COPY packages/shared-schema/tsconfig.json ./packages/shared-schema/
-COPY packages/shared-schema/src ./packages/shared-schema/src
+COPY packages/ ./packages/
 COPY tsconfig.json ./
 RUN npm ci --ignore-scripts || npm i --ignore-scripts
-# Skip husky in Docker (HUSKY=0), run ts-patch and build required packages
-RUN HUSKY=0 npm run prepare
+# Manually run prepare steps (skip husky which is for git hooks)
+RUN npx ts-patch install -s && \
+    cd packages/shared-schema && npm run build && cd ../.. && \
+    cd packages/plugin-api && npm run build && cd ../..
 
 # Copy source and build
 COPY . .
