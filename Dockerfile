@@ -33,7 +33,8 @@ RUN npm run prepare
 # Copy source and build
 COPY . .
 # Pass build args as environment variables for the build commands
-RUN UNSPLASH_KEY=$UNSPLASH_KEY UNSPLASH_CLIENT_ID=$UNSPLASH_CLIENT_ID npm run env && npm run lint && npm run buildFrontend:prodWeb
+# Skip lint in CI as it's already run in pre-push hook
+RUN UNSPLASH_KEY=$UNSPLASH_KEY UNSPLASH_CLIENT_ID=$UNSPLASH_CLIENT_ID npm run env && npm run buildFrontend:prodWeb
 
 # Production stage
 FROM nginx:1
