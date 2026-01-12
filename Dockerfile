@@ -1,13 +1,15 @@
 # Build stage
-FROM --platform=$BUILDPLATFORM node:20 AS build
+FROM node:20 AS build
 
 # Accept build arguments for environment variables with defaults
 ARG UNSPLASH_KEY=DUMMY_UNSPLASH_KEY
 ARG UNSPLASH_CLIENT_ID=DUMMY_UNSPLASH_CLIENT_ID
+ARG NODE_OPTIONS=--max-old-space-size=4096
 
 # Set as environment variables for the build
 ENV UNSPLASH_KEY=$UNSPLASH_KEY
 ENV UNSPLASH_CLIENT_ID=$UNSPLASH_CLIENT_ID
+ENV NODE_OPTIONS=$NODE_OPTIONS
 
 WORKDIR /app
 
