@@ -23,15 +23,15 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/* \
     && git config --global url."https://github.com/".insteadOf ssh://git@github.com/
 
-# Copy and install dependencies
+# Copy package files and install dependencies with workspaces
 COPY package*.json ./
 COPY packages/ ./packages/
 COPY tsconfig.json ./
-RUN npm ci --ignore-scripts || npm i --ignore-scripts
-# Manually run prepare steps (skip husky which is for git hooks)
-RUN npx ts-patch install -s && \
-    cd packages/shared-schema && npm run build && cd ../.. && \
-    cd packages/plugin-api && npm run build && cd ../..
+# Install with HUSKY=0 to skip git hooks, workspaces will be set up
+ENV HUSKY=0
+RUN npm ci || npm i
+# Build required packages
+RUN npm run shared-schema:build && npm run plugin-api:build
 
 # Copy source and build
 COPY . .
