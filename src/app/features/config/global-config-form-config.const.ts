@@ -16,6 +16,7 @@ import { DOMINA_MODE_FORM } from './form-cfgs/domina-mode-form.const';
 import { FOCUS_MODE_FORM_CFG } from './form-cfgs/focus-mode-form.const';
 import { REMINDER_FORM_CFG } from './form-cfgs/reminder-form.const';
 import { SHORT_SYNTAX_FORM_CFG } from './form-cfgs/short-syntax-form.const';
+import { CALDAV_CALENDAR_FORM_CFG } from './form-cfgs/caldav-calendar-form.const';
 
 const filterGlobalConfigForm = (cfg: ConfigFormSection<any>): boolean => {
   return (
@@ -34,6 +35,7 @@ export const GLOBAL_CONFIG_FORM_CONFIG: ConfigFormConfig = [
   TIME_TRACKING_FORM_CFG,
   REMINDER_FORM_CFG,
   SCHEDULE_FORM_CFG,
+  CALDAV_CALENDAR_FORM_CFG,
 ].filter(filterGlobalConfigForm);
 
 export const GLOBAL_IMEX_FORM_CONFIG: ConfigFormConfig = [

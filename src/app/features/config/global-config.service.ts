@@ -5,6 +5,7 @@ import { updateGlobalConfigSection } from './store/global-config.actions';
 import { Observable } from 'rxjs';
 import { DEFAULT_GLOBAL_CONFIG } from './default-global-config.const';
 import {
+  CaldavCalendarConfig,
   EvaluationConfig,
   GlobalConfigSectionKey,
   GlobalConfigState,
@@ -20,6 +21,7 @@ import {
   TakeABreakConfig,
 } from './global-config.model';
 import {
+  selectCaldavCalendarConfig,
   selectConfigFeatureState,
   selectEvaluationConfig,
   selectIdleConfig,
@@ -95,6 +97,11 @@ export class GlobalConfigService {
     select(selectTimelineConfig),
   );
 
+  caldavCalendar$: Observable<CaldavCalendarConfig | undefined> = this._store.pipe(
+    select(selectCaldavCalendarConfig),
+    shareReplay(1),
+  );
+
   // Signal versions of the properties
   readonly cfg: Signal<GlobalConfigState | undefined> = toSignal(this.cfg$, {
     initialValue: undefined,
@@ -134,6 +141,12 @@ export class GlobalConfigService {
   readonly timelineCfg: Signal<ScheduleConfig | undefined> = toSignal(this.timelineCfg$, {
     initialValue: undefined,
   });
+  readonly caldavCalendar: Signal<CaldavCalendarConfig | undefined> = toSignal(
+    this.caldavCalendar$,
+    {
+      initialValue: undefined,
+    },
+  );
 
   updateSection(
     sectionKey: GlobalConfigSectionKey,

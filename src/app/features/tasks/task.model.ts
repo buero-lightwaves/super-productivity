@@ -93,6 +93,7 @@ export interface TaskCopy
   hasPlannedTime?: boolean;
   attachments: TaskAttachment[];
   reminderId?: string | null;
+  calendarEventUid?: string | null; // UID of the VEVENT in CalDAV calendar when task is scheduled
 
   // Ensure type compatibility for internal fields
   modified?: number;

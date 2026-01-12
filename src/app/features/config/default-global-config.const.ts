@@ -3,6 +3,7 @@ import { TRACKING_INTERVAL } from '../../app.constants';
 import { getDefaultVoice } from '../domina-mode/getAvailableVoices';
 import { TaskReminderOptionId } from '../tasks/task.model';
 import { GlobalConfigState } from './global-config.model';
+import { DEFAULT_CALDAV_CALENDAR_CFG } from '../caldav-calendar-sync/caldav-calendar.model';
 
 const minute = 60 * 1000;
 const defaultVoice = getDefaultVoice();
@@ -216,4 +217,6 @@ export const DEFAULT_GLOBAL_CONFIG: GlobalConfigState = {
       syncFolderPath: '',
     },
   },
+
+  caldavCalendar: DEFAULT_CALDAV_CALENDAR_CFG,
 } as const;

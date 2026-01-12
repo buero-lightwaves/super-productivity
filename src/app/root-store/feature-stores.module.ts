@@ -65,6 +65,7 @@ import { AndroidEffects } from '../features/android/store/android.effects';
 import { AndroidFocusModeEffects } from '../features/android/store/android-focus-mode.effects';
 import { AndroidForegroundTrackingEffects } from '../features/android/store/android-foreground-tracking.effects';
 import { CaldavIssueEffects } from '../features/issue/providers/caldav/caldav-issue.effects';
+import { CaldavCalendarEffects } from '../features/caldav-calendar-sync/caldav-calendar.effects';
 import { CalendarIntegrationEffects } from '../features/calendar-integration/store/calendar-integration.effects';
 import { ElectronEffects } from '../core/electron/electron.effects';
 import { DominaModeEffects } from '../features/domina-mode/store/domina-mode.effects';
@@ -182,6 +183,7 @@ import {
         : []),
     ]),
     EffectsModule.forFeature([CaldavIssueEffects]),
+    EffectsModule.forFeature([CaldavCalendarEffects]),
     EffectsModule.forFeature([CalendarIntegrationEffects]),
     EffectsModule.forFeature([ElectronEffects]),
     EffectsModule.forFeature([DominaModeEffects]),

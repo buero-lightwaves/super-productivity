@@ -1,6 +1,7 @@
 import { updateGlobalConfigSection } from './global-config.actions';
 import { createFeatureSelector, createReducer, createSelector, on } from '@ngrx/store';
 import {
+  CaldavCalendarConfig,
   DominaModeConfig,
   EvaluationConfig,
   FocusModeConfig,
@@ -76,6 +77,10 @@ export const selectPomodoroConfig = createSelector(
 export const selectReminderConfig = createSelector(
   selectConfigFeatureState,
   (cfg): ReminderConfig => cfg.reminder,
+);
+export const selectCaldavCalendarConfig = createSelector(
+  selectConfigFeatureState,
+  (cfg): CaldavCalendarConfig | undefined => cfg.caldavCalendar,
 );
 export const selectIsFocusModeEnabled = createSelector(
   selectConfigFeatureState,

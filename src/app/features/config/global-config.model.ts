@@ -205,6 +205,14 @@ export type FocusModeConfig = Readonly<{
   isManualBreakStart?: boolean;
 }>;
 
+export type CaldavCalendarConfig = Readonly<{
+  isEnabled: boolean;
+  caldavUrl: string | null;
+  calendarName: string | null;
+  username: string | null;
+  password: string | null;
+}>;
+
 export type DailySummaryNote = Readonly<{
   txt?: string;
   lastUpdateDayStr?: string;
@@ -228,6 +236,7 @@ export type GlobalConfigState = Readonly<{
   schedule: ScheduleConfig;
   dominaMode: DominaModeConfig;
   focusMode: FocusModeConfig;
+  caldavCalendar?: CaldavCalendarConfig;
 
   sync: SyncConfig;
   dailySummaryNote?: DailySummaryNote;
@@ -257,7 +266,8 @@ export type CustomCfgSection =
   | 'JIRA_CFG'
   | 'SIMPLE_COUNTER_CFG'
   | 'OPENPROJECT_CFG'
-  | 'CLICKUP_CFG';
+  | 'CLICKUP_CFG'
+  | 'CALDAV_CALENDAR_CFG';
 
 // Intermediate model
 export interface ConfigFormSection<FormModel> {
