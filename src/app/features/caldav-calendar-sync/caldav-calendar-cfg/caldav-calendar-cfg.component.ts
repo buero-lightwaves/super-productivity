@@ -126,11 +126,11 @@ import {
             [(ngModel)]="localCfg.syncTodos"
             (ngModelChange)="onSave()"
           >
-            Sync tasks as VTODOs
+            Sync tasks as calendar events
           </mat-slide-toggle>
           <p class="hint">
-            When enabled, tasks will appear as todos in your calendar app. You can drag
-            them to timeslots to create timeboxed events.
+            When enabled, new tasks are created as calendar events (default: next hour, 1h
+            duration). Adjust times in your calendar app for timeboxing.
           </p>
         </div>
       }

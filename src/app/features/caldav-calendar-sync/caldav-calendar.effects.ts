@@ -6,11 +6,7 @@ import { catchError, filter, map, mergeMap, withLatestFrom } from 'rxjs/operator
 import { EMPTY } from 'rxjs';
 import { GlobalConfigService } from '../config/global-config.service';
 import { CaldavCalendarService } from './caldav-calendar.service';
-import {
-  CaldavCalendarCfg,
-  CalendarEventData,
-  CalendarTodoData,
-} from './caldav-calendar.model';
+import { CaldavCalendarCfg, CalendarEventData } from './caldav-calendar.model';
 import { Store } from '@ngrx/store';
 import { TaskService } from '../tasks/task.service';
 import { Log } from '../../core/log';
@@ -281,39 +277,51 @@ export class CaldavCalendarEffects {
     { dispatch: false },
   );
 
-  // ==================== VTODO Effects ====================
+  // ==================== Task Sync Effects (creates VEVENTs for tasks) ====================
 
   /**
-   * When a task is created, create a VTODO (if syncTodos is enabled)
+   * When a task is created, create a VEVENT (if syncTodos is enabled)
+   * Creates an event with a default time slot (next full hour, 1 hour duration)
+   * User can adjust times in their calendar app, changes sync back to SP
    * Only syncs main tasks, not subtasks
    */
-  createTodoOnAddTask$ = createEffect(() =>
+  createEventOnAddTask$ = createEffect(() =>
     this._localActions$.pipe(
       ofType(TaskSharedActions.addTask),
       withLatestFrom(this._globalConfigService.caldavCalendar$),
       filter(([{ task }, cfg]) => this._isTodoSyncEnabled(cfg) && !task.parentId),
       mergeMap(([{ task }, cfg]) => {
-        const todoData: CalendarTodoData = {
-          uid: `sp-todo-${task.id}`,
+        // Default: next full hour, 1 hour duration (or use task's time estimate)
+        const now = Date.now();
+        const nextHour = new Date(now);
+        nextHour.setMinutes(0, 0, 0);
+        nextHour.setHours(nextHour.getHours() + 1);
+        const startTime = nextHour.getTime();
+        const duration = task.timeEstimate || DEFAULT_EVENT_DURATION_MS;
+
+        const eventData: CalendarEventData = {
+          uid: `sp-task-${task.id}`,
           summary: task.title,
+          start: startTime,
+          end: startTime + duration,
           description: task.notes || undefined,
-          status: 'NEEDS-ACTION',
         };
 
-        return this._caldavCalendarService.createTodo$(cfg!, todoData).pipe(
+        return this._caldavCalendarService.createEvent$(cfg!, eventData).pipe(
           map((uid) =>
             TaskSharedActions.updateTask({
               task: {
                 id: task.id,
                 changes: {
-                  calendarTodoUid: uid,
+                  calendarEventUid: uid,
+                  dueWithTime: startTime,
                 },
               },
               isIgnoreShortSyntax: true,
             }),
           ),
           catchError((err) => {
-            Log.err('CalDAV Calendar: Failed to create VTODO', err);
+            Log.err('CalDAV Calendar: Failed to create event for task', err);
             return EMPTY;
           }),
         );
@@ -322,9 +330,9 @@ export class CaldavCalendarEffects {
   );
 
   /**
-   * When a task title is updated, update the VTODO summary
+   * When a task title is updated, update the synced event summary
    */
-  updateTodoOnTitleChange$ = createEffect(
+  updateSyncedEventOnTitleChange$ = createEffect(
     () =>
       this._localActions$.pipe(
         ofType(TaskSharedActions.updateTask),
@@ -333,15 +341,19 @@ export class CaldavCalendarEffects {
         filter(([_, cfg]) => this._isTodoSyncEnabled(cfg)),
         mergeMap(([{ task }, cfg]) =>
           this._taskService.getByIdOnce$(task.id as string).pipe(
-            filter((fullTask) => !!fullTask?.calendarTodoUid),
+            filter(
+              (fullTask) =>
+                !!fullTask?.calendarEventUid &&
+                fullTask.calendarEventUid.startsWith('sp-task-'),
+            ),
             mergeMap((fullTask) =>
               this._caldavCalendarService
-                .updateTodo$(cfg!, fullTask!.calendarTodoUid!, {
+                .updateEvent$(cfg!, fullTask!.calendarEventUid!, {
                   summary: task.changes.title as string,
                 })
                 .pipe(
                   catchError((err) => {
-                    Log.err('CalDAV Calendar: Failed to update VTODO title', err);
+                    Log.err('CalDAV Calendar: Failed to update event title', err);
                     return EMPTY;
                   }),
                 ),
@@ -353,40 +365,9 @@ export class CaldavCalendarEffects {
   );
 
   /**
-   * When a task notes are updated, update the VTODO description
+   * When a task is marked as done, delete the synced calendar event
    */
-  updateTodoOnNotesChange$ = createEffect(
-    () =>
-      this._localActions$.pipe(
-        ofType(TaskSharedActions.updateTask),
-        filter(({ task }) => task.changes.notes !== undefined),
-        withLatestFrom(this._globalConfigService.caldavCalendar$),
-        filter(([_, cfg]) => this._isTodoSyncEnabled(cfg)),
-        mergeMap(([{ task }, cfg]) =>
-          this._taskService.getByIdOnce$(task.id as string).pipe(
-            filter((fullTask) => !!fullTask?.calendarTodoUid),
-            mergeMap((fullTask) =>
-              this._caldavCalendarService
-                .updateTodo$(cfg!, fullTask!.calendarTodoUid!, {
-                  description: (task.changes.notes as string) || '',
-                })
-                .pipe(
-                  catchError((err) => {
-                    Log.err('CalDAV Calendar: Failed to update VTODO description', err);
-                    return EMPTY;
-                  }),
-                ),
-            ),
-          ),
-        ),
-      ),
-    { dispatch: false },
-  );
-
-  /**
-   * When a task is marked as done, mark the VTODO as completed
-   */
-  completeTodoOnTaskDone$ = createEffect(
+  deleteSyncedEventOnTaskDone$ = createEffect(
     () =>
       this._localActions$.pipe(
         ofType(TaskSharedActions.updateTask),
@@ -395,13 +376,30 @@ export class CaldavCalendarEffects {
         filter(([_, cfg]) => this._isTodoSyncEnabled(cfg)),
         mergeMap(([{ task }, cfg]) =>
           this._taskService.getByIdOnce$(task.id as string).pipe(
-            filter((fullTask) => !!fullTask?.calendarTodoUid),
+            filter(
+              (fullTask) =>
+                !!fullTask?.calendarEventUid &&
+                fullTask.calendarEventUid.startsWith('sp-task-'),
+            ),
             mergeMap((fullTask) =>
               this._caldavCalendarService
-                .completeTodo$(cfg!, fullTask!.calendarTodoUid!)
+                .deleteEvent$(cfg!, fullTask!.calendarEventUid!)
                 .pipe(
+                  map(() =>
+                    this._store.dispatch(
+                      TaskSharedActions.updateTask({
+                        task: {
+                          id: task.id as string,
+                          changes: {
+                            calendarEventUid: null,
+                          },
+                        },
+                        isIgnoreShortSyntax: true,
+                      }),
+                    ),
+                  ),
                   catchError((err) => {
-                    Log.err('CalDAV Calendar: Failed to complete VTODO', err);
+                    Log.err('CalDAV Calendar: Failed to delete event on task done', err);
                     return EMPTY;
                   }),
                 ),
@@ -413,52 +411,23 @@ export class CaldavCalendarEffects {
   );
 
   /**
-   * When a task is marked as not done (reopened), set VTODO status back to NEEDS-ACTION
+   * When a task is deleted, delete the synced calendar event
    */
-  reopenTodoOnTaskUndone$ = createEffect(
-    () =>
-      this._localActions$.pipe(
-        ofType(TaskSharedActions.updateTask),
-        filter(({ task }) => task.changes.isDone === false),
-        withLatestFrom(this._globalConfigService.caldavCalendar$),
-        filter(([_, cfg]) => this._isTodoSyncEnabled(cfg)),
-        mergeMap(([{ task }, cfg]) =>
-          this._taskService.getByIdOnce$(task.id as string).pipe(
-            filter((fullTask) => !!fullTask?.calendarTodoUid),
-            mergeMap((fullTask) =>
-              this._caldavCalendarService
-                .updateTodo$(cfg!, fullTask!.calendarTodoUid!, {
-                  status: 'NEEDS-ACTION',
-                  percentComplete: 0,
-                })
-                .pipe(
-                  catchError((err) => {
-                    Log.err('CalDAV Calendar: Failed to reopen VTODO', err);
-                    return EMPTY;
-                  }),
-                ),
-            ),
-          ),
-        ),
-      ),
-    { dispatch: false },
-  );
-
-  /**
-   * When a task is deleted, delete the VTODO
-   */
-  deleteTodoOnTaskDelete$ = createEffect(
+  deleteSyncedEventOnTaskDelete$ = createEffect(
     () =>
       this._localActions$.pipe(
         ofType(TaskSharedActions.deleteTask),
         withLatestFrom(this._globalConfigService.caldavCalendar$),
         filter(
-          ([{ task }, cfg]) => this._isTodoSyncEnabled(cfg) && !!task.calendarTodoUid,
+          ([{ task }, cfg]) =>
+            this._isTodoSyncEnabled(cfg) &&
+            !!task.calendarEventUid &&
+            task.calendarEventUid.startsWith('sp-task-'),
         ),
         mergeMap(([{ task }, cfg]) =>
-          this._caldavCalendarService.deleteTodo$(cfg!, task.calendarTodoUid!).pipe(
+          this._caldavCalendarService.deleteEvent$(cfg!, task.calendarEventUid!).pipe(
             catchError((err) => {
-              Log.err('CalDAV Calendar: Failed to delete VTODO', err);
+              Log.err('CalDAV Calendar: Failed to delete synced event', err);
               return EMPTY;
             }),
           ),
