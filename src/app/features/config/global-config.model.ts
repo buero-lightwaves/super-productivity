@@ -211,6 +211,7 @@ export type CaldavCalendarConfig = Readonly<{
   calendarName: string | null;
   username: string | null;
   password: string | null;
+  syncTodos: boolean;
 }>;
 
 export type DailySummaryNote = Readonly<{

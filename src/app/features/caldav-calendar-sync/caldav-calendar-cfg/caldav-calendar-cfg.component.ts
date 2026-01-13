@@ -119,6 +119,20 @@ import {
             </span>
           }
         </div>
+
+        <div class="sync-options">
+          <h4>Sync Options</h4>
+          <mat-slide-toggle
+            [(ngModel)]="localCfg.syncTodos"
+            (ngModelChange)="onSave()"
+          >
+            Sync tasks as VTODOs
+          </mat-slide-toggle>
+          <p class="hint">
+            When enabled, tasks will appear as todos in your calendar app. You can drag
+            them to timeslots to create timeboxed events.
+          </p>
+        </div>
       }
     </div>
   `,
@@ -164,6 +178,23 @@ import {
       button mat-icon {
         margin-right: 8px;
       }
+
+      .sync-options {
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px solid rgba(128, 128, 128, 0.3);
+      }
+
+      .sync-options h4 {
+        margin: 0 0 12px 0;
+        font-weight: 500;
+      }
+
+      .sync-options .hint {
+        margin: 8px 0 0 0;
+        font-size: 12px;
+        color: rgba(128, 128, 128, 0.8);
+      }
     `,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -186,6 +217,7 @@ export class CaldavCalendarCfgComponent {
         calendarName: v.calendarName,
         username: v.username,
         password: v.password,
+        syncTodos: v.syncTodos ?? false,
       };
     }
   }

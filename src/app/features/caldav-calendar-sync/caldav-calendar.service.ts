@@ -1,5 +1,9 @@
 import { Injectable, inject } from '@angular/core';
-import { CaldavCalendarCfg, CalendarEventData } from './caldav-calendar.model';
+import {
+  CaldavCalendarCfg,
+  CalendarEventData,
+  CalendarTodoData,
+} from './caldav-calendar.model';
 // @ts-ignore
 import DavClient, { namespaces as NS } from '@nextcloud/cdav-library';
 // @ts-ignore
@@ -142,6 +146,58 @@ export class CaldavCalendarService {
     return from(this._deleteEvent(cfg, uid)).pipe(
       catchError((err) =>
         throwError({ [HANDLED_ERROR_PROP_STR]: 'CalDAV Calendar: ' + err }),
+      ),
+    );
+  }
+
+  // ==================== VTODO Methods ====================
+
+  /**
+   * Create a VTODO for a task
+   */
+  createTodo$(cfg: CaldavCalendarCfg, todoData: CalendarTodoData): Observable<string> {
+    return from(this._createTodo(cfg, todoData)).pipe(
+      catchError((err) =>
+        throwError({ [HANDLED_ERROR_PROP_STR]: 'CalDAV Calendar (VTODO): ' + err }),
+      ),
+    );
+  }
+
+  /**
+   * Update an existing VTODO
+   */
+  updateTodo$(
+    cfg: CaldavCalendarCfg,
+    uid: string,
+    todoData: Partial<CalendarTodoData>,
+  ): Observable<void> {
+    return from(this._updateTodo(cfg, uid, todoData)).pipe(
+      catchError((err) =>
+        throwError({ [HANDLED_ERROR_PROP_STR]: 'CalDAV Calendar (VTODO): ' + err }),
+      ),
+    );
+  }
+
+  /**
+   * Mark a VTODO as completed
+   */
+  completeTodo$(cfg: CaldavCalendarCfg, uid: string): Observable<void> {
+    return from(
+      this._updateTodo(cfg, uid, { status: 'COMPLETED', percentComplete: 100 }),
+    ).pipe(
+      catchError((err) =>
+        throwError({ [HANDLED_ERROR_PROP_STR]: 'CalDAV Calendar (VTODO): ' + err }),
+      ),
+    );
+  }
+
+  /**
+   * Delete a VTODO
+   */
+  deleteTodo$(cfg: CaldavCalendarCfg, uid: string): Observable<void> {
+    return from(this._deleteTodo(cfg, uid)).pipe(
+      catchError((err) =>
+        throwError({ [HANDLED_ERROR_PROP_STR]: 'CalDAV Calendar (VTODO): ' + err }),
       ),
     );
   }
@@ -359,6 +415,227 @@ END:VCALENDAR`;
     }
 
     Log.log('CalDAV Calendar: Deleted event', uid);
+  }
+
+  // ==================== Private VTODO Implementation ====================
+
+  private async _createTodo(
+    cfg: CaldavCalendarCfg,
+    todoData: CalendarTodoData,
+  ): Promise<string> {
+    console.log('CalDAV: Creating VTODO', {
+      cfg: { ...cfg, password: '***' },
+      todoData,
+    });
+    const calendar = await this._getCalendar(cfg);
+    console.log('CalDAV: Got calendar for VTODO', calendar?.displayname || calendar?.url);
+
+    if (calendar.readOnly) {
+      this._snackService.open({
+        type: 'ERROR',
+        translateParams: {
+          calendarName: cfg.calendarName as string,
+        },
+        msg: T.F.CALDAV.S.CALENDAR_READ_ONLY,
+      });
+      throw new Error('CALENDAR READ ONLY: ' + cfg.calendarName);
+    }
+
+    const uid = todoData.uid || CaldavCalendarService._generateUid();
+    const now = CaldavCalendarService._formatIcalDateTime(Date.now());
+
+    let icalData = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Super Productivity//CalDAV Calendar Sync//EN
+BEGIN:VTODO
+UID:${uid}
+DTSTAMP:${now}
+CREATED:${now}
+SUMMARY:${this._escapeIcalText(todoData.summary)}
+STATUS:${todoData.status || 'NEEDS-ACTION'}`;
+
+    if (todoData.description) {
+      icalData += `\nDESCRIPTION:${this._escapeIcalText(todoData.description)}`;
+    }
+
+    if (todoData.priority !== undefined) {
+      icalData += `\nPRIORITY:${todoData.priority}`;
+    }
+
+    if (todoData.dueDate !== undefined) {
+      const dueStr = CaldavCalendarService._formatIcalDateTime(todoData.dueDate);
+      icalData += `\nDUE:${dueStr}`;
+    }
+
+    if (todoData.percentComplete !== undefined) {
+      icalData += `\nPERCENT-COMPLETE:${todoData.percentComplete}`;
+    }
+
+    icalData += `
+SEQUENCE:0
+END:VTODO
+END:VCALENDAR`;
+
+    try {
+      await calendar.createVObject(icalData);
+      Log.log('CalDAV Calendar: Created VTODO', uid);
+      return uid;
+    } catch (err) {
+      this._handleNetErr(err);
+      throw err;
+    }
+  }
+
+  private async _updateTodo(
+    cfg: CaldavCalendarCfg,
+    uid: string,
+    todoData: Partial<CalendarTodoData>,
+  ): Promise<void> {
+    const calendar = await this._getCalendar(cfg);
+
+    if (calendar.readOnly) {
+      this._snackService.open({
+        type: 'ERROR',
+        translateParams: {
+          calendarName: cfg.calendarName as string,
+        },
+        msg: T.F.CALDAV.S.CALENDAR_READ_ONLY,
+      });
+      throw new Error('CALENDAR READ ONLY: ' + cfg.calendarName);
+    }
+
+    // Find the VTODO by UID
+    const todos = await this._findTodoByUid(calendar, uid);
+
+    if (todos.length < 1) {
+      Log.warn('CalDAV Calendar: VTODO not found for update', uid);
+      return;
+    }
+
+    const todo = todos[0];
+    const jCal = ICAL.parse(todo.data);
+    const comp = new ICAL.Component(jCal);
+    const vtodo = comp.getFirstSubcomponent('vtodo');
+
+    if (!vtodo) {
+      Log.err('No vtodo found', todo);
+      return;
+    }
+
+    const now = ICAL.Time.now();
+    let changeObserved = false;
+
+    if (todoData.summary !== undefined) {
+      const oldSummary = vtodo.getFirstPropertyValue('summary');
+      if (todoData.summary !== oldSummary) {
+        vtodo.updatePropertyWithValue('summary', todoData.summary);
+        changeObserved = true;
+      }
+    }
+
+    if (todoData.description !== undefined) {
+      vtodo.updatePropertyWithValue('description', todoData.description);
+      changeObserved = true;
+    }
+
+    if (todoData.status !== undefined) {
+      vtodo.updatePropertyWithValue('status', todoData.status);
+      changeObserved = true;
+      // Set COMPLETED timestamp when marking as completed
+      if (todoData.status === 'COMPLETED') {
+        vtodo.updatePropertyWithValue('completed', now);
+      }
+    }
+
+    if (todoData.percentComplete !== undefined) {
+      vtodo.updatePropertyWithValue('percent-complete', todoData.percentComplete);
+      changeObserved = true;
+    }
+
+    if (todoData.priority !== undefined) {
+      vtodo.updatePropertyWithValue('priority', todoData.priority);
+      changeObserved = true;
+    }
+
+    if (todoData.dueDate !== undefined) {
+      const newDue = ICAL.Time.fromJSDate(new Date(todoData.dueDate), false);
+      vtodo.updatePropertyWithValue('due', newDue);
+      changeObserved = true;
+    }
+
+    if (!changeObserved) {
+      return;
+    }
+
+    vtodo.updatePropertyWithValue('last-modified', now);
+    vtodo.updatePropertyWithValue('dtstamp', now);
+
+    const sequence = vtodo.getFirstPropertyValue('sequence');
+    const sequenceInt = sequence ? parseInt(sequence as string) + 1 : 1;
+    vtodo.updatePropertyWithValue('sequence', sequenceInt);
+
+    todo.data = ICAL.stringify(jCal);
+    if (todo.update) {
+      await todo.update().catch((err: unknown) => this._handleNetErr(err));
+    }
+
+    Log.log('CalDAV Calendar: Updated VTODO', uid);
+  }
+
+  private async _deleteTodo(cfg: CaldavCalendarCfg, uid: string): Promise<void> {
+    const calendar = await this._getCalendar(cfg);
+
+    const todos = await this._findTodoByUid(calendar, uid);
+
+    if (todos.length < 1) {
+      Log.warn('CalDAV Calendar: VTODO not found for deletion', uid);
+      return;
+    }
+
+    const todo = todos[0];
+
+    if (todo.delete) {
+      await todo.delete().catch((err: unknown) => this._handleNetErr(err));
+    }
+
+    Log.log('CalDAV Calendar: Deleted VTODO', uid);
+  }
+
+  private async _findTodoByUid(
+    calendar: Calendar,
+    todoUid: string,
+  ): Promise<
+    {
+      data: string;
+      url: string;
+      etag: string;
+      update?: () => Promise<void>;
+      delete?: () => Promise<void>;
+    }[]
+  > {
+    const query = {
+      name: [NS.IETF_CALDAV, 'comp-filter'],
+      attributes: [['name', 'VCALENDAR']],
+      children: [
+        {
+          name: [NS.IETF_CALDAV, 'comp-filter'],
+          attributes: [['name', 'VTODO']],
+          children: [
+            {
+              name: [NS.IETF_CALDAV, 'prop-filter'],
+              attributes: [['name', 'uid']],
+              children: [
+                {
+                  name: [NS.IETF_CALDAV, 'text-match'],
+                  value: todoUid,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    return await calendar.calendarQuery([query]);
   }
 
   private async _findEventByUid(

@@ -94,6 +94,7 @@ export interface TaskCopy
   attachments: TaskAttachment[];
   reminderId?: string | null;
   calendarEventUid?: string | null; // UID of the VEVENT in CalDAV calendar when task is scheduled
+  calendarTodoUid?: string | null; // UID of the VTODO in CalDAV calendar
 
   // Ensure type compatibility for internal fields
   modified?: number;
